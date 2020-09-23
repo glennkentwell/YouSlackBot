@@ -37,3 +37,22 @@ module.exports.createUserList = async (slackToken) => {
   });
 
 };
+
+module.exports.msg = async (slackToken, channel, msg) => {
+
+  if (typeof web === 'undefined') {
+    debug.log('creating new slack web client');
+    web = new WebClient(slackToken);
+  }
+
+  return await new Promise((resolve, reject) => {
+    web.chat.postMessage({ channel: channel, text: msg }).then(result => {
+      if (result.ok) {
+        resolve();
+      }
+    }).catch(error => {
+      console.log('error sending message', error);
+      reject(error);
+    });
+  });
+}

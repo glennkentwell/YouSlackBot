@@ -1,7 +1,7 @@
 var fs = require('fs');
 var readline = require('readline');
 var google = require('googleapis');
-var youtube = google.youtube('v3');
+var youtube = new google.youtube_v3.Youtube('v3');
 var googleAuth = require('google-auth-library');
 
 var SCOPES = ['https://www.googleapis.com/auth/youtube'];
@@ -28,15 +28,32 @@ var credentials = JSON.stringify(YT_CREDS);
  ** @param err
  ** @param content
  */
-fs.readFile(YT_CREDS, function processClientSecrets(err, content) {
+module.exports = {
+    authCheckInsert(callback) {
+        fs.readFile(YT_CREDS, function processClientSecrets(err, content) {
 
-    if (err) {
-        console.log('Error loading client secret file: ' + err);
-        return;
-    }
+            if (err) {
+                console.log('Error loading client secret file: ' + err);
+                return;
+            }
 
-    authorize(JSON.parse(content), insertToPlaylist);
-});
+            authorize(JSON.parse(content), (oauth) => {
+                let videoId = require(VIDEO_ID_PATH);
+                debug.log('****');
+                debug.log('checking playlist');
+                debug.log('****');
+                checkPlaylist(oauth, videoId, (oauth, msgs) => {
+                    console.log('checked playlist: ', msgs);
+                    if (msgs.length === 0) {
+                        insertToPlaylist(oauth);
+                    } else {
+                        callback(msgs);
+                    }
+                });
+            });
+        });
+    },
+};
 
 
 /**
@@ -47,11 +64,16 @@ fs.readFile(YT_CREDS, function processClientSecrets(err, content) {
  * @param {function} callback The callback to call with the authorized client.
  */
 function authorize(credentials, callback) {
-    var clientSecret = credentials.installed.client_secret;
-    var clientId = credentials.installed.client_id;
-    var redirectUrl = credentials.installed.redirect_uris[0];
-    var auth = new googleAuth();
-    var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
+    const {client_secret, client_id, redirect_uris} = credentials.installed;
+    // var clientSecret = credentials.installed.client_secret;
+    // var clientId = credentials.installed.client_id;
+    // var redirectUrl = credentials.installed.redirect_uris[0];
+    // var oauth2Client = new googleAuth.OAuth2Client(clientId, clientSecret, redirectUrl);
+
+    const oauth2Client = new googleAuth.OAuth2Client(client_id, client_secret, redirect_uris[0]);
+
+    // var oauth2Client = new auth.OAuth2();
+    // var oauth2Client = auth.getClient()
 
     // Check if we have previously stored a token.
     fs.readFile(TOKEN_PATH, function(err, token) {
@@ -122,10 +144,10 @@ function storeToken(token) {
  * Send video id to playlist with YoutubeAPI function
  * @param auth contains authorize information
  */
-function insertToPlaylist(auth) {
+function insertToPlaylist(auth, videoId) {
 
     var details = {
-        videoId: require(VIDEO_ID_PATH),
+        videoId: videoId,
         kind: 'youtube#video'
     };
 
@@ -161,4 +183,28 @@ function insertToPlaylist(auth) {
 purgeCache(VIDEO_ID_PATH); // Delete the cached video id to prepare for next run
 
 
-
+function checkPlaylist(auth, videoId, cb) {
+    debug.log('checking playlist', auth);
+    youtube.playlistItems.list({
+        part: ["snippet"],
+        playlistId: require(PLAYLIST_PATH),
+        videoId: videoId,
+        userId: 'me',
+        auth: auth,
+    })
+      .then(function (response) {
+            // Handle the results here (response.result has the parsed body).
+            console.log("Response", response);
+            let msgs = [];
+            if (response.data && response.data.items && Array.isArray(response.data.items)) {
+                const items = response.data.items;
+                for (let i = 0; i < items.length; i++) {
+                    let playlistItem = items[i];
+                    msgs.push(`Skipped because ${playlistItem.snippet.title} was already #${playlistItem.snippet.position} in the playlist`);
+                }
+            }
+            cb(auth, msgs);
+        },
+        err => console.error("Execute error", err)
+      );
+}

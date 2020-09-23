@@ -57,7 +57,7 @@ rtm.on('message', function handleRtmMessage(message) {
     let nameId = getName(message.user, userList); // Sets nameId as the actual name of the message user not the ID
 
     if (message.text !== undefined && message.text.indexOf("youtu") >= 0) { // looks for youtube links and parses the ID with ytDigest module function in ./localModules/ - then logs message to console
-      ytDigest(message); // sends whole message object to be parsed and uploaded to youtube playlist
+      ytDigest(message, xoxb); // sends whole message object to be parsed and uploaded to youtube playlist
     }
 
     debug.log('start.js:message:', nameId + ': ' + message.text); // Logs all messages to the console with user name and message text
