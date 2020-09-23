@@ -40,12 +40,12 @@ module.exports = {
             authorize(JSON.parse(content), (oauth) => {
                 let videoId = require(VIDEO_ID_PATH);
                 debug.log('****');
-                debug.log('checking playlist');
+                debug.log('checking playlist for video', videoId);
                 debug.log('****');
-                checkPlaylist(oauth, videoId, (oauth, msgs) => {
+                checkPlaylist(oauth, videoId, (msgs) => {
                     console.log('checked playlist: ', msgs);
                     if (msgs.length === 0) {
-                        insertToPlaylist(oauth);
+                        insertToPlaylist(oauth, videoId);
                     } else {
                         callback(msgs);
                     }
@@ -176,6 +176,7 @@ function insertToPlaylist(auth, videoId) {
 
         else {
             debug.log('Video successfully listed!')
+            // callback(videoId);
         }
     });
 
@@ -183,8 +184,8 @@ function insertToPlaylist(auth, videoId) {
 purgeCache(VIDEO_ID_PATH); // Delete the cached video id to prepare for next run
 
 
-function checkPlaylist(auth, videoId, cb) {
-    debug.log('checking playlist', auth);
+function checkPlaylist(auth, videoId, cb, expectedCount = 0) {
+    debug.log('checking playlist for video', videoId, ' expecting', expectedCount);
     youtube.playlistItems.list({
         part: ["snippet"],
         playlistId: require(PLAYLIST_PATH),
@@ -198,12 +199,17 @@ function checkPlaylist(auth, videoId, cb) {
             let msgs = [];
             if (response.data && response.data.items && Array.isArray(response.data.items)) {
                 const items = response.data.items;
-                for (let i = 0; i < items.length; i++) {
-                    let playlistItem = items[i];
-                    msgs.push(`Skipped because ${playlistItem.snippet.title} was already #${playlistItem.snippet.position} in the playlist`);
+                if (items.length > 0 && items.length === expectedCount) {
+                    msgs.push(`Added ${items[0].snippet.title} at #${items[0].snippet.position}`);
+                } else {
+                    for (let i = 0; i < items.length; i++) {
+                        let playlistItem = items[i];
+                        msgs.push(`Skipped because ${playlistItem.snippet.title} was already #${playlistItem.snippet.position} in the playlist`);
+                    }
                 }
             }
-            cb(auth, msgs);
+            console.log('callback msgs: ', msgs);
+            cb(msgs);
         },
         err => console.error("Execute error", err)
       );
